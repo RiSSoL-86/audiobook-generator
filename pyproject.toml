@@ -1,0 +1,71 @@
+[project]
+name = "audiobook-generator"
+version = "0.1.0"
+description = "Audiobook generator from PDF: text extraction, chapter and chunk splitting, Soniox TTS narration, and per-chapter MP3 merging."
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "typer>=0.27",
+    "rich>=15.0",
+    "pydantic>=2.13",
+    "pydantic-settings>=2.14",
+    "httpx>=0.28",
+    "llama-cloud>=1.0",
+    "aiofiles>=25.1.0",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.16",
+    "mypy>=2.3",
+    "pytest>=8.3",
+    "pre-commit>=4.0",
+    "types-aiofiles>=25.1.0.20260518",
+    "pytest-asyncio>=1.4.0",
+    "pytest-cov>=7.1.0",
+]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+src = ["src"]
+line-length = 79
+target-version = "py314"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF", "TC"]
+
+[tool.ruff.lint.flake8-type-checking]
+runtime-evaluated-base-classes = [
+    "pydantic.BaseModel",
+    "pydantic_settings.BaseSettings",
+    "core.common.schema.CamelCaseModel",
+    "services.common.schema.Schema",
+]
+
+[tool.mypy]
+mypy_path = "src"
+python_version = "3.14"
+strict = true
+warn_unused_ignores = true
+explicit_package_bases = true
+enable_error_code = ["explicit-override"]
+
+[tool.pytest.ini_options]
+addopts = "--strict-markers --cov --cov-report=term-missing"
+asyncio_mode = "auto"
+pythonpath = ["src"]
+testpaths = ["src"]
+python_files = ["test_*.py", "*_test.py"]
+
+[tool.coverage.run]
+source = ["src"]
+omit = [
+    "*/tests/*",
+    "*/conftest.py",
+    "*/main.py",
+]
+
+[tool.coverage.report]
+show_missing = true

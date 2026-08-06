@@ -1,0 +1,36 @@
+default_stages: [ pre-commit ]
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: check-toml
+        files: ^pyproject\.toml$
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-merge-conflict
+
+  - repo: local
+    hooks:
+      - id: ruff
+        name: ruff
+        entry: uv run ruff check
+        args: [ --fix ]
+        language: system
+        types: [ python ]
+        files: ^src/
+
+      - id: ruff-format
+        name: ruff-format
+        entry: uv run ruff format
+        language: system
+        types: [ python ]
+        files: ^src/
+
+      - id: mypy
+        name: mypy
+        entry: uv run mypy
+        language: system
+        types: [ python ]
+        # MyPy needs to run on the whole project to check types across files
+        pass_filenames: false
+        args: [ "src" ]
