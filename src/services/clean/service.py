@@ -11,7 +11,7 @@ class CleanService(BaseService):
     HYPHEN_BREAK = re.compile(r"(\w)-\n(\w)")
     HTML_TAG = re.compile(r"<[^>]+>")
     MD_TABLE_ROW = re.compile(r"^[ \t]*\|.*$\n?", re.MULTILINE)
-    PAGE_NUMBER = re.compile(r"^\s*\d{1,4}\s*$", re.MULTILINE)
+    NO_CONTENT = re.compile(r"NO_CONTENT_HERE")
     TRAILING_WS = re.compile(r"[ \t]+\n")
     MULTI_BLANK = re.compile(r"\n{3,}")
 
@@ -25,6 +25,7 @@ class CleanService(BaseService):
         text = self.HYPHEN_BREAK.sub(r"\1\2", text)
         text = self.HTML_TAG.sub("", text)
         text = self.MD_TABLE_ROW.sub("", text)
+        text = self.NO_CONTENT.sub("", text)
 
         # Drop short lines that repeat like running headers or footers.
         lines = text.split("\n")
@@ -42,7 +43,6 @@ class CleanService(BaseService):
             line for line in lines if line.strip() not in repeated
         )
 
-        text = self.PAGE_NUMBER.sub("", text)
         text = self.TRAILING_WS.sub("\n", text)
         text = self.MULTI_BLANK.sub("\n\n", text)
         return text.strip() + "\n"
