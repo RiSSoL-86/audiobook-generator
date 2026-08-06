@@ -21,6 +21,8 @@ dev = [
     "pytest>=8.3",
     "pre-commit>=4.0",
     "types-aiofiles>=25.1.0.20260518",
+    "pytest-asyncio>=1.4.0",
+    "pytest-cov>=7.1.0",
 ]
 
 [tool.uv]
@@ -51,6 +53,19 @@ explicit_package_bases = true
 enable_error_code = ["explicit-override"]
 
 [tool.pytest.ini_options]
+addopts = "--strict-markers --cov --cov-report=term-missing"
+asyncio_mode = "auto"
 pythonpath = ["src"]
 testpaths = ["src"]
 python_files = ["test_*.py", "*_test.py"]
+
+[tool.coverage.run]
+source = ["src"]
+omit = [
+    "*/tests/*",
+    "*/conftest.py",
+    "*/main.py",
+]
+
+[tool.coverage.report]
+show_missing = true

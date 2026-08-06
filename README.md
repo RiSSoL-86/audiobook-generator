@@ -1,4 +1,4 @@
-# audiobook-generator
+# Audiobook-generator
 
 Generate an audiobook from a PDF: text extraction, chapter and chunk
 splitting, Soniox TTS narration, and per-chapter MP3 merging.
