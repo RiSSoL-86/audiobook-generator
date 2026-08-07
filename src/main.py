@@ -72,8 +72,6 @@ class Pipeline:
             await self._stage_merge()
 
     def _load_manifest(self) -> BookManifest:
-        # Always reuse an existing manifest; --force only re-runs stages,
-        # it must never discard already-detected chapters or chunks.
         if self.repo.exists():
             return self.repo.load()
         return BookManifest(
@@ -88,8 +86,6 @@ class Pipeline:
             self.repo.save(manifest=self.manifest)
 
     def _save_progress(self) -> None:
-        # Throttle the per-chunk manifest writes fired by concurrent TTS
-        # workers so we don't rewrite the whole file on every finished chunk.
         now = time.monotonic()
         if now - self._last_progress_save < self.PROGRESS_SAVE_INTERVAL:
             return
@@ -170,8 +166,6 @@ class Pipeline:
             )
             if self.dry_run:
                 continue
-            # A fresh split invalidates any previous chunk and audio files;
-            # drop the stale folders so re-runs don't leave orphans behind.
             for stale_dir in (
                 self.paths.chapter_chunks_dir(chapter.index),
                 self.paths.chapter_audio_dir(chapter.index),

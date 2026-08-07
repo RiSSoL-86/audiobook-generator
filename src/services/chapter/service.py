@@ -128,8 +128,6 @@ class ChapterService(BaseService):
             return [self._make(index=1, title="Book", body=body)]
         result: list[ChapterContent] = []
         index = 0
-        # Keep the front matter before the first heading, dropping the contents
-        # block if it sits there so the TOC listing is never narrated.
         head_lines = lines[: heads[0]]
         span = self._contents_range(lines=lines)
         if span is not None and span[1] <= heads[0]:
