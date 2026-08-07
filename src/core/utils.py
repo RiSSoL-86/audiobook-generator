@@ -24,7 +24,7 @@ def slugify(value: str) -> str:
     text = unicodedata.normalize("NFKC", value).strip().lower()
     text = _STRIP_CHARS.sub("", text)
     text = _SEPARATORS.sub("_", text).strip("_")
-    return text[:SLUG_MAX_LEN] or "untitled"
+    return text[:SLUG_MAX_LEN].strip("_") or "untitled"
 
 
 def get_logger(name: str) -> logging.Logger:

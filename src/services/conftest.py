@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 @pytest.fixture
 def book_paths(tmp_path: Path) -> BookPaths:
     """A BookPaths rooted in an isolated temp directory."""
-    return BookPaths.create(output_dir=tmp_path, book_slug="book")
+    return BookPaths(root=tmp_path / "book")
 
 
 @pytest.fixture

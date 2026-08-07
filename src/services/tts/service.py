@@ -22,7 +22,10 @@ class TTSService(BaseService):
     """Voices a chapter's chunks, skipping done files and retrying failures."""
 
     MAX_BACKOFF_SECONDS = 30
-    tts_client: TTSClient = SonioxTTSClient()
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.tts_client: TTSClient = SonioxTTSClient()
 
     @override
     async def execute(
@@ -60,12 +63,20 @@ class TTSService(BaseService):
     ) -> None:
         text_path = paths.chunk_file(chapter_index, chunk.index)
         audio_path = paths.chunk_audio_file(chapter_index, chunk.index)
-        async with aiofiles.open(text_path, encoding="utf-8") as text_file:
-            text = await text_file.read()
         last_error = "unknown error"
         for attempt in range(self.settings.tts.max_retries + 1):
             try:
+                async with aiofiles.open(
+                    text_path, encoding="utf-8"
+                ) as text_file:
+                    text = await text_file.read()
                 result = await self.tts_client.synthesize(text=text)
+                if not result.audio:
+                    msg = "provider returned empty audio"
+                    raise RuntimeError(msg)
+                await aiofiles.os.makedirs(audio_path.parent, exist_ok=True)
+                async with aiofiles.open(audio_path, "wb") as audio_file:
+                    await audio_file.write(result.audio)
             except Exception as exc:
                 last_error = str(exc)
                 self.logger.warning(
@@ -76,9 +87,6 @@ class TTSService(BaseService):
                     backoff = min(2**attempt, self.MAX_BACKOFF_SECONDS)
                     await asyncio.sleep(backoff)
                 continue
-            await aiofiles.os.makedirs(audio_path.parent, exist_ok=True)
-            async with aiofiles.open(audio_path, "wb") as audio_file:
-                await audio_file.write(result.audio)
             chunk.status = ChunkStatus.GENERATED
             chunk.error = None
             chunk.request_id = result.request_id

@@ -64,7 +64,6 @@ source = ["src"]
 omit = [
     "*/tests/*",
     "*/conftest.py",
-    "*/main.py",
 ]
 
 [tool.coverage.report]

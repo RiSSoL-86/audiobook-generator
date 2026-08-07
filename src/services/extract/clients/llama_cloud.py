@@ -38,11 +38,17 @@ class LlamaCloudExtractClient(ExtractClient):
                 upload_file=pdf_path,
                 tier="cost_effective",
                 version="latest",
-                expand=["markdown_full"],
+                expand=["markdown"],
                 agentic_options={"custom_prompt": self.PROMPT},
                 processing_options={"ignore": {"ignore_text_in_image": True}},
                 output_options={
                     "markdown": {"tables": {"output_tables_as_markdown": True}}
                 },
             )
-        return response.markdown_full or ""
+        if response.markdown_full:
+            return response.markdown_full
+        markdown = getattr(response, "markdown", None)
+        pages = getattr(markdown, "pages", None) or []
+        return "\n\n".join(
+            page.markdown for page in pages if getattr(page, "markdown", None)
+        )

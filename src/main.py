@@ -1,4 +1,6 @@
 import asyncio
+import shutil
+import time
 from datetime import UTC, datetime
 from pathlib import Path  # noqa: TC003 - runtime type for Typer options
 from typing import TYPE_CHECKING, Annotated, final
@@ -31,6 +33,8 @@ app = typer.Typer(add_completion=False, help="Generate an audiobook from PDF.")
 class Pipeline:
     """Runs the ordered stages and persists the manifest between them."""
 
+    PROGRESS_SAVE_INTERVAL = 2.0
+
     def __init__(
         self,
         pdf_path: Path,
@@ -47,6 +51,7 @@ class Pipeline:
         self.repo = ManifestRepository(path=paths.manifest_file)
         self.manifest = self._load_manifest()
         self.logger = get_logger("pipeline")
+        self._last_progress_save = 0.0
 
     async def run(self, from_stage: Stage, to_stage: Stage) -> None:
         """Execute every stage in the ``[from_stage, to_stage]`` range."""
@@ -67,7 +72,9 @@ class Pipeline:
             await self._stage_merge()
 
     def _load_manifest(self) -> BookManifest:
-        if self.repo.exists() and not self.force:
+        # Always reuse an existing manifest; --force only re-runs stages,
+        # it must never discard already-detected chapters or chunks.
+        if self.repo.exists():
             return self.repo.load()
         return BookManifest(
             source_file=self.pdf.name,
@@ -79,6 +86,15 @@ class Pipeline:
     def _save(self) -> None:
         if not self.dry_run:
             self.repo.save(manifest=self.manifest)
+
+    def _save_progress(self) -> None:
+        # Throttle the per-chunk manifest writes fired by concurrent TTS
+        # workers so we don't rewrite the whole file on every finished chunk.
+        now = time.monotonic()
+        if now - self._last_progress_save < self.PROGRESS_SAVE_INTERVAL:
+            return
+        self._last_progress_save = now
+        self._save()
 
     def _chapters(self) -> list[Chapter]:
         if self.chapter is None:
@@ -100,6 +116,12 @@ class Pipeline:
         raw = await extract_service.execute(pdf_path=self.pdf)
         clean_service = CleanService()
         clean = await clean_service.execute(raw_text=raw)
+        if not clean.strip():
+            msg = (
+                f"No text extracted from {self.pdf.name}; refusing to cache "
+                "an empty result. Check the PDF and extraction settings."
+            )
+            raise RuntimeError(msg)
         self.paths.text_dir.mkdir(parents=True, exist_ok=True)
         self.paths.full_text_file.write_text(clean, encoding="utf-8")
         self.manifest.status = BookStatus.TEXT_EXTRACTED
@@ -148,6 +170,14 @@ class Pipeline:
             )
             if self.dry_run:
                 continue
+            # A fresh split invalidates any previous chunk and audio files;
+            # drop the stale folders so re-runs don't leave orphans behind.
+            for stale_dir in (
+                self.paths.chapter_chunks_dir(chapter.index),
+                self.paths.chapter_audio_dir(chapter.index),
+            ):
+                if stale_dir.exists():
+                    shutil.rmtree(stale_dir)
             chapter.chunks = [content.chunk for content in contents]
             for content in contents:
                 file = self.paths.chunk_file(
@@ -171,7 +201,7 @@ class Pipeline:
             await tts_service.execute(
                 chapter=chapter,
                 paths=self.paths,
-                on_progress=self._save,
+                on_progress=self._save_progress,
             )
             self._save()
         chapters = self.manifest.chapters
@@ -240,6 +270,12 @@ def generate(
     ] = False,
 ) -> None:
     """Run the audiobook pipeline for one PDF into an output folder."""
+    if from_stage.stage > to_stage.stage:
+        msg = (
+            f"--from-stage ({from_stage.value}) must not come after "
+            f"--to-stage ({to_stage.value})"
+        )
+        raise typer.BadParameter(msg)
     setup_logging(settings.app.log_level)
     pipeline = Pipeline(
         pdf_path=input_pdf.resolve(),

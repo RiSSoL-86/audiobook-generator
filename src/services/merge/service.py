@@ -23,9 +23,10 @@ class MergeService(BaseService):
     @override
     async def execute(self, chapter: Chapter, paths: BookPaths) -> MergeResult:
         """Merge all chunks of a chapter into its final MP3 file."""
+        ordered_chunks = sorted(chapter.chunks, key=lambda chunk: chunk.index)
         audio_files = [
             paths.chunk_audio_file(chapter.index, chunk.index)
-            for chunk in chapter.chunks
+            for chunk in ordered_chunks
         ]
         exists = await asyncio.gather(
             *(aiofiles.os.path.exists(path) for path in audio_files)
@@ -51,7 +52,8 @@ class MergeService(BaseService):
         """Concatenate and re-encode files for consistent, seekable output."""
         list_path = output.with_suffix(".txt")
         entries = "\n".join(
-            f"file '{path.resolve().as_posix()}'" for path in files
+            "file '{}'".format(path.resolve().as_posix().replace("'", "'\\''"))
+            for path in files
         )
         async with aiofiles.open(
             list_path, "w", encoding="utf-8"
@@ -79,18 +81,25 @@ class MergeService(BaseService):
 
     async def _probe_duration(self, path: Path) -> float | None:
         """Return the media duration in seconds via ffprobe, if available."""
-        proc = await asyncio.create_subprocess_exec(
-            self.settings.app.ffprobe_path,
-            "-v",
-            "error",
-            "-show_entries",
-            "format=duration",
-            "-of",
-            "default=noprint_wrappers=1:nokey=1",
-            str(path),
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.DEVNULL,
-        )
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                self.settings.app.ffprobe_path,
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
+                str(path),
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+        except FileNotFoundError:
+            self.logger.warning(
+                msg="ffprobe not found at "
+                f"{self.settings.app.ffprobe_path!r}; skipping duration probe"
+            )
+            return None
         stdout, _ = await proc.communicate()
         if proc.returncode != 0:
             return None

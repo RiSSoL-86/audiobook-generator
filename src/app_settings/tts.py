@@ -32,7 +32,9 @@ class TTSSettings(BaseSettings):
         default=3, ge=0, description="Retries per chunk on failure"
     )
     request_timeout: float = Field(
-        default=60.0, gt=0, description="Per-request timeout, seconds"
+        default=180.0,
+        gt=0,
+        description="Per-request timeout, seconds (one chunk can be ~120s)",
     )
     concurrency: int = Field(
         default=3,

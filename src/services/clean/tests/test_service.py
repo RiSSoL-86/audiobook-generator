@@ -13,6 +13,13 @@ async def test_strips_html_tags() -> None:
     assert result.strip() == "A bold and italic word"
 
 
+async def test_keeps_angle_brackets_in_prose() -> None:
+    # The tag stripper must not eat comparison operators in ordinary text.
+    text = "If a < 5 and b > 3 then stop."
+    result = await CleanService().execute(text)
+    assert result.strip() == "If a < 5 and b > 3 then stop."
+
+
 async def test_removes_markdown_table_rows() -> None:
     text = "Before\n\n| a | b |\n| - | - |\n\nAfter"
     result = await CleanService().execute(text)
@@ -37,6 +44,13 @@ async def test_drops_repeated_running_headers() -> None:
     assert header not in result
     assert "Body one" in result
     assert "Body two" in result
+
+
+async def test_keeps_repeated_headings() -> None:
+    heading = "# Summary"
+    parts = [heading, "a", heading, "b", heading, "c", heading, "d", heading]
+    result = await CleanService().execute("\n\n".join(parts))
+    assert result.count(heading) == 5
 
 
 async def test_keeps_short_lines_below_repeat_threshold() -> None:

@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Self, final
+from typing import final
 
 from pydantic import BaseModel, ConfigDict
 
@@ -13,11 +13,6 @@ class BookPaths(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     root: Path
-
-    @classmethod
-    def create(cls, output_dir: Path, book_slug: str) -> Self:
-        """Build the layout rooted at ``output_dir/book_slug``."""
-        return cls(root=output_dir / book_slug)
 
     @property
     def manifest_file(self) -> Path:

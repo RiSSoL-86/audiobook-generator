@@ -13,7 +13,9 @@ if TYPE_CHECKING:
 class ExtractService(BaseService):
     """Extracts raw text from a PDF via a pluggable extraction client."""
 
-    extract_client: ExtractClient = LlamaCloudExtractClient()
+    def __init__(self) -> None:
+        super().__init__()
+        self.extract_client: ExtractClient = LlamaCloudExtractClient()
 
     @override
     async def execute(self, pdf_path: Path) -> str:
