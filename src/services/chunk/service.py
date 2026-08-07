@@ -14,6 +14,11 @@ class ChunkService(BaseService):
     SENTENCE_SPLIT = re.compile(r"(?<=[.!?…])\s+")
     PARAGRAPH_JOIN = "\n\n"
 
+    MD_BOLD = re.compile(r"\*\*(?!\s)(.+?)(?<!\s)\*\*")
+    MD_ITALIC = re.compile(r"\*(?!\s)(.+?)(?<!\s)\*")
+    MD_HEADING = re.compile(r"(?m)^[ \t]*#{1,6}[ \t]*")
+    MD_BLOCKQUOTE = re.compile(r"(?m)^[ \t]*>[ \t]?")
+
     @override
     async def execute(
         self, body: str, chapter_index: int
@@ -34,6 +39,10 @@ class ChunkService(BaseService):
 
     def _atoms(self, body: str) -> list[str]:
         """Split into paragraphs, then sentences, then hard-wrap by words."""
+        body = self.MD_BOLD.sub(r"\1", body)
+        body = self.MD_ITALIC.sub(r"\1", body)
+        body = self.MD_HEADING.sub("", body)
+        body = self.MD_BLOCKQUOTE.sub("", body)
         atoms: list[str] = []
         for raw in self.PARAGRAPH_SPLIT.split(body):
             paragraph = raw.strip()

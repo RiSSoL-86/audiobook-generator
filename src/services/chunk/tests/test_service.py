@@ -68,3 +68,33 @@ async def test_no_chunk_exceeds_hard_cap() -> None:
     chunks = await build_service().execute(body=body, chapter_index=1)
     assert chunks
     assert all(chunk.chunk.char_count <= 30 for chunk in chunks)
+
+
+async def test_strips_markdown_heading_markers() -> None:
+    body = "# System Engineering\n\n## Analysis, Design"
+    chunks = await build_service(hard_max=60, target_max=60).execute(
+        body=body, chapter_index=1
+    )
+    text = "\n\n".join(chunk.text for chunk in chunks)
+    assert "#" not in text
+    assert "System Engineering" in text
+    assert "Analysis, Design" in text
+
+
+async def test_strips_emphasis_and_blockquote_markers() -> None:
+    body = "A **bold** and *italic* word.\n\n> A quoted line."
+    chunks = await build_service(hard_max=80, target_max=80).execute(
+        body=body, chapter_index=1
+    )
+    text = "\n\n".join(chunk.text for chunk in chunks)
+    assert "*" not in text
+    assert ">" not in text
+    assert "A bold and italic word." in text
+    assert "A quoted line." in text
+
+
+async def test_keeps_bare_asterisk_in_prose() -> None:
+    chunks = await build_service(hard_max=80, target_max=80).execute(
+        body="Compute 2 * 3 for the result.", chapter_index=1
+    )
+    assert chunks[0].text == "Compute 2 * 3 for the result."

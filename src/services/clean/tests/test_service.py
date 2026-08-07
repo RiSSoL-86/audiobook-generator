@@ -59,11 +59,62 @@ async def test_keeps_short_lines_below_repeat_threshold() -> None:
     assert result.count("Keep me") == 2
 
 
-async def test_keeps_standalone_numbers_in_body() -> None:
-    # The value-based page-number cut was removed; real numbers must survive.
+async def test_keeps_isolated_standalone_number() -> None:
+    # A lone number (no page run) must survive: it is likely a real value.
     text = "In the year\n\n1984\n\nsomething happened."
     result = await CleanService().execute(text)
     assert "1984" in result
+
+
+async def test_drops_ascending_page_number_run() -> None:
+    body = "\n\n".join(
+        f"Body paragraph {n}.\n\n{p}"
+        for n, p in enumerate([8, 30, 33, 42, 47, 50], start=1)
+    )
+    result = await CleanService().execute(body)
+    for page in ("8", "30", "33", "42", "47", "50"):
+        assert f"\n{page}\n" not in f"\n{result}\n"
+    assert "Body paragraph 1." in result
+
+
+async def test_keeps_number_that_breaks_the_page_run() -> None:
+    # 615 then 34: the out-of-sequence 34 is real content, not a page number.
+    lines = [str(v) for v in (18, 83, 231, 309, 615, 34, 761)]
+    text = "\n\n".join(["Intro.", *lines, "Outro."])
+    result = await CleanService().execute(text)
+    assert "\n34\n" in f"\n{result}\n"
+    assert "\n615\n" not in f"\n{result}\n"
+
+
+async def test_drops_roman_and_compound_page_numbers() -> None:
+    text = "First.\n\nxiv\n\n12-1\n\nSecond."
+    result = await CleanService().execute(text)
+    assert "xiv" not in result
+    assert "12-1" not in result
+    assert "First." in result
+    assert "Second." in result
+
+
+async def test_strips_page_number_glued_to_caps_heading() -> None:
+    result = await CleanService().execute("# CHAPTER EXERCISES 413\n\nBody.")
+    assert "# CHAPTER EXERCISES" in result
+    assert "413" not in result
+
+
+async def test_removes_repeated_caps_running_header_keeps_anchor() -> None:
+    text = "\n\n".join(
+        [
+            "# Why a pyramid structure?",
+            "Real body.",
+            "# WHY A PYRAMID STRUCTURE",
+            "More.",
+            "# WHY A PYRAMID STRUCTURE",
+            "Even more.",
+        ]
+    )
+    result = await CleanService().execute(text)
+    assert "# Why a pyramid structure?" in result  # title-case anchor kept
+    assert result.count("# WHY A PYRAMID STRUCTURE") == 1
 
 
 async def test_normalizes_newlines_and_collapses_blank_lines() -> None:

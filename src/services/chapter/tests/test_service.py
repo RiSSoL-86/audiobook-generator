@@ -111,3 +111,128 @@ async def test_slug_is_derived_from_title() -> None:
     by_title = {item.chapter.raw_title: item.chapter for item in chapters}
     chapter = by_title["Why a pyramid structure?"]
     assert chapter.slug == "why_a_pyramid_structure"
+
+
+# A LlamaParse-style textbook TOC: chapter entries rendered as headings,
+# Roman front-matter pages, dotted sub-sections and PART dividers to ignore,
+# then a noisy body where running headers repeat titles and page numbers lead
+# headings -- the shape that used to explode into hundreds of chapters.
+TEXTBOOK = """\
+Title Page
+
+# CONTENTS
+
+FOREWORD xv
+
+## 1 Systems Engineering 1
+
+1.1 Definitions of Key Terms, 2
+
+1.2 Approach to this Chapter, 4
+
+PART I FUNDAMENTALS 49
+
+3 System Attributes 51
+
+3.1 Definition of Key Terms, 51
+
+INDEX 821
+
+# FOREWORD
+
+Foreword body.
+
+# 1 SYSTEMS ENGINEERING
+
+Chapter one body.
+
+# 2 SYSTEMS ENGINEERING
+
+More chapter one, page two running header.
+
+# 62 SYSTEM ATTRIBUTES
+
+Chapter three body.
+
+# INDEX
+
+Index body.
+"""
+
+
+async def test_textbook_toc_ignores_sections_headers_and_page_numbers() -> (
+    None
+):
+    chapters = await ChapterService().execute(TEXTBOOK)
+    titles = [item.chapter.raw_title for item in chapters]
+    # Front matter, the two named entries, two numbered chapters -- no
+    # sub-sections (1.1, 3.1), PART dividers, or per-page running headers.
+    assert titles == [
+        "Front matter",
+        "FOREWORD",
+        "Systems Engineering",
+        "System Attributes",
+        "INDEX",
+    ]
+    by_title = {item.chapter.raw_title: item for item in chapters}
+    assert by_title["Systems Engineering"].chapter.page_start == 1
+    assert by_title["System Attributes"].chapter.page_start == 51
+    # The running-header page ("page two") stays inside chapter one's body.
+    assert "page two running header" in by_title["Systems Engineering"].body
+    # The contents listing is never narrated.
+    for item in chapters:
+        assert "# CONTENTS" not in item.body
+        assert "PART I FUNDAMENTALS" not in item.body
+
+
+# A real-world defect: the parser split the contents across pages and put the
+# '# CONTENTS' heading in the MIDDLE of the listing, while the top of the list
+# (chapters 1-2) sat above it. A copyright page's printer line ('10 9 8 7')
+# also looks like a numbered entry. Anchoring on the word 'Contents' lost the
+# early chapters; anchoring on the page-number run recovers them.
+SPLIT_TOC_BOOK = """\
+Title Page
+
+10 9 8 7
+
+1 First Chapter 5
+2 Second Chapter 9
+
+# CONTENTS
+
+3 Third Chapter 21
+4 Fourth Chapter 33
+
+# First Chapter
+
+Body one.
+
+# Second Chapter
+
+Body two.
+
+# Third Chapter
+
+Body three.
+
+# Fourth Chapter
+
+Body four.
+"""
+
+
+async def test_contents_split_around_heading_keeps_all_chapters() -> None:
+    chapters = await ChapterService().execute(SPLIT_TOC_BOOK)
+    titles = [item.chapter.raw_title for item in chapters]
+    # No chapter is swallowed into front matter; the printer line is ignored.
+    assert titles == [
+        "Front matter",
+        "First Chapter",
+        "Second Chapter",
+        "Third Chapter",
+        "Fourth Chapter",
+    ]
+    for item in chapters:
+        assert "# CONTENTS" not in item.body
+        assert "First Chapter 5" not in item.body
+        assert "10 9 8 7" not in item.body
