@@ -42,8 +42,9 @@ async def test_extract_calls_llamaparse_and_returns_markdown(
         parsing = FakeParsing()
 
     class FakeLlamaCloud:
-        def __init__(self, *, api_key: str) -> None:
+        def __init__(self, *, api_key: str, timeout: object) -> None:
             captured["api_key"] = api_key
+            captured["timeout"] = timeout
 
         async def __aenter__(self) -> FakeClient:
             return FakeClient()
@@ -59,6 +60,7 @@ async def test_extract_calls_llamaparse_and_returns_markdown(
 
     assert result == "# Extracted body"
     assert captured["api_key"] == "secret-key"
+    assert captured["timeout"] is LlamaCloudExtractClient.TIMEOUT
     assert captured["upload_file"] == Path("book.pdf")
     assert captured["expand"] == ["markdown"]
     prompt = captured["agentic_options"]["custom_prompt"]
@@ -82,7 +84,7 @@ async def test_extract_stitches_pages_when_no_markdown_full(
         parsing = FakeParsing()
 
     class FakeLlamaCloud:
-        def __init__(self, *, api_key: str) -> None:
+        def __init__(self, *, api_key: str, timeout: object) -> None:
             pass
 
         async def __aenter__(self) -> FakeClient:
@@ -109,7 +111,7 @@ async def test_extract_returns_empty_string_when_no_markdown(
         parsing = FakeParsing()
 
     class FakeLlamaCloud:
-        def __init__(self, *, api_key: str) -> None:
+        def __init__(self, *, api_key: str, timeout: object) -> None:
             pass
 
         async def __aenter__(self) -> FakeClient:
