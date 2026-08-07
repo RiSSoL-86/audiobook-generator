@@ -1,9 +1,10 @@
 from typing import final
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from core.common.schema import CamelCaseModel
 from core.models.chunk import Chunk, ChunkStatus
+from core.utils import slugify
 
 
 @final
@@ -34,6 +35,12 @@ class Chapter(CamelCaseModel):
     duration_seconds: float | None = Field(
         default=None, ge=0, description="Final MP3 duration, if measured"
     )
+
+    @field_validator("slug")
+    @classmethod
+    def _safe_slug(cls, value: str) -> str:
+        """Re-slugify so a hand-edited manifest can't smuggle path segments."""
+        return slugify(value=value)
 
     @property
     def chunk_total(self) -> int:

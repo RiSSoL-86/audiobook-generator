@@ -45,3 +45,11 @@ def test_index_must_be_positive() -> None:
 def test_duration_seconds_must_be_non_negative() -> None:
     with pytest.raises(ValidationError):
         Chapter(index=1, raw_title="x", slug="x", duration_seconds=-1.0)
+
+
+def test_slug_is_sanitized_against_path_traversal() -> None:
+    # A hand-edited manifest must not smuggle path segments through the slug.
+    chapter = Chapter(index=1, raw_title="x", slug="../../etc/evil")
+    assert "/" not in chapter.slug
+    assert ".." not in chapter.slug
+    assert chapter.slug == "etcevil"

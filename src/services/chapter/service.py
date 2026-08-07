@@ -17,10 +17,13 @@ class ChapterService(BaseService):
     )
     TOC_NAMED = re.compile(
         r"^\s*\*{0,2}(?P<title>preface|introduction|references|foreword"
-        r"|prologue|epilogue|afterword|index|acknowledge?ments?)\*{0,2}"
+        r"|prologue|epilogue|afterword|index|acknowledge?ments?"
+        r"|введение|предисловие|послесловие|пролог|эпилог"
+        r"|заключение|приложение|указатель)\*{0,2}"
         r"\s+(?P<page>\d+)\s*$",
         re.IGNORECASE,
     )
+    CONTENTS_TITLES = frozenset({"contents", "содержание", "оглавление"})
 
     @override
     async def execute(self, clean_text: str) -> list[ChapterContent]:
@@ -32,14 +35,14 @@ class ChapterService(BaseService):
             return self._fallback(lines=lines)
         return self._build(lines=lines, bounds=bounds)
 
-    def _toc_anchors(self, lines: list[str]) -> list[tuple[str, int]]:
-        """Parse ordered (title, page) chapter entries from the contents."""
+    def _contents_range(self, lines: list[str]) -> tuple[int, int] | None:
+        """Locate the contents block as a ``[start, end)`` line range."""
         start = next(
             (i for i, line in enumerate(lines) if self._is_contents(line)),
             None,
         )
         if start is None:
-            return []
+            return None
         end = next(
             (
                 i
@@ -49,6 +52,14 @@ class ChapterService(BaseService):
             ),
             len(lines),
         )
+        return start, end
+
+    def _toc_anchors(self, lines: list[str]) -> list[tuple[str, int]]:
+        """Parse ordered (title, page) chapter entries from the contents."""
+        span = self._contents_range(lines=lines)
+        if span is None:
+            return []
+        start, end = span
         anchors: list[tuple[str, int]] = []
         for line in lines[start:end]:
             match = self.TOC_NUMBERED.match(line) or self.TOC_NAMED.match(line)
@@ -86,7 +97,11 @@ class ChapterService(BaseService):
         """Slice body text between bounds into ordered chapters."""
         result: list[ChapterContent] = []
         index = 0
-        preamble = "\n".join(lines[: bounds[0][0]]).strip()
+        head_lines = lines[: bounds[0][0]]
+        span = self._contents_range(lines=lines)
+        if span is not None and span[1] <= bounds[0][0]:
+            head_lines = lines[: span[0]] + lines[span[1] : bounds[0][0]]
+        preamble = "\n".join(head_lines).strip()
         if preamble:
             index += 1
             result.append(
@@ -104,17 +119,31 @@ class ChapterService(BaseService):
     def _fallback(self, lines: list[str]) -> list[ChapterContent]:
         """Split on top-level headings when no contents section is found."""
         heads = [
-            i for i, line in enumerate(lines) if line.lstrip().startswith("# ")
+            i
+            for i, line in enumerate(lines)
+            if line.lstrip().startswith("# ") and not self._is_contents(line)
         ]
         if not heads:
             body = "\n".join(lines).strip()
             return [self._make(index=1, title="Book", body=body)]
         result: list[ChapterContent] = []
+        index = 0
+        head_lines = lines[: heads[0]]
+        span = self._contents_range(lines=lines)
+        if span is not None and span[1] <= heads[0]:
+            head_lines = lines[: span[0]] + lines[span[1] : heads[0]]
+        preamble = "\n".join(head_lines).strip()
+        if preamble:
+            index += 1
+            result.append(
+                self._make(index=index, title="Front matter", body=preamble)
+            )
         ends = [*heads[1:], len(lines)]
-        for index, (start, end) in enumerate(zip(heads, ends, strict=True), 1):
+        for start, end in zip(heads, ends, strict=True):
             match = self.HEADING.match(lines[start])
             title = match.group("title") if match else lines[start].strip()
             body = "\n".join(lines[start + 1 : end]).strip()
+            index += 1
             result.append(self._make(index=index, title=title, body=body))
         return result
 
@@ -132,9 +161,12 @@ class ChapterService(BaseService):
         return ChapterContent(chapter=chapter, body=body)
 
     def _is_contents(self, line: str) -> bool:
-        """Whether a line is a heading titled 'Contents'."""
+        """Whether a line is a heading titled 'Contents' (or a translation)."""
         match = self.HEADING.match(line)
-        return match is not None and self._norm(match["title"]) == "contents"
+        return (
+            match is not None
+            and self._norm(match["title"]) in self.CONTENTS_TITLES
+        )
 
     @staticmethod
     def _norm(title: str) -> str:

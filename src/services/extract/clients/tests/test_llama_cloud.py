@@ -60,8 +60,42 @@ async def test_extract_calls_llamaparse_and_returns_markdown(
     assert result == "# Extracted body"
     assert captured["api_key"] == "secret-key"
     assert captured["upload_file"] == Path("book.pdf")
+    assert captured["expand"] == ["markdown"]
     prompt = captured["agentic_options"]["custom_prompt"]
     assert prompt == LlamaCloudExtractClient.PROMPT
+
+
+async def test_extract_stitches_pages_when_no_markdown_full(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeParsing:
+        async def parse(self, **kwargs: Any) -> SimpleNamespace:
+            pages = SimpleNamespace(
+                pages=[
+                    SimpleNamespace(markdown="# One"),
+                    SimpleNamespace(markdown="Body two"),
+                ]
+            )
+            return SimpleNamespace(markdown_full=None, markdown=pages)
+
+    class FakeClient:
+        parsing = FakeParsing()
+
+    class FakeLlamaCloud:
+        def __init__(self, *, api_key: str) -> None:
+            pass
+
+        async def __aenter__(self) -> FakeClient:
+            return FakeClient()
+
+        async def __aexit__(self, *exc: object) -> bool:
+            return False
+
+    monkeypatch.setattr(llama_cloud, "AsyncLlamaCloud", FakeLlamaCloud)
+    client = LlamaCloudExtractClient()
+    with_key(client, "secret-key")
+
+    assert await client.extract(Path("book.pdf")) == "# One\n\nBody two"
 
 
 async def test_extract_returns_empty_string_when_no_markdown(

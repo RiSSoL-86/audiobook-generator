@@ -9,7 +9,7 @@ class CleanService(BaseService):
     """Cleans extracted text: dehyphenation and running-noise removal."""
 
     HYPHEN_BREAK = re.compile(r"(\w)-\n(\w)")
-    HTML_TAG = re.compile(r"<[^>]+>")
+    HTML_TAG = re.compile(r"</?[A-Za-z][A-Za-z0-9-]*(?:\s+[^<>]*?)?/?>")
     MD_TABLE_ROW = re.compile(r"^[ \t]*\|.*$\n?", re.MULTILINE)
     NO_CONTENT = re.compile(r"NO_CONTENT_HERE")
     TRAILING_WS = re.compile(r"[ \t]+\n")
@@ -32,6 +32,8 @@ class CleanService(BaseService):
         counts: dict[str, int] = {}
         for line in lines:
             key = line.strip()
+            if key.startswith("#"):
+                continue
             if key and len(key) <= self.SHORT_LINE_LEN:
                 counts[key] = counts.get(key, 0) + 1
         repeated = {

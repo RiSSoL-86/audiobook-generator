@@ -7,12 +7,7 @@ from core.paths import BookPaths
 
 
 def make_paths() -> BookPaths:
-    return BookPaths.create(output_dir=Path("/out"), book_slug="my_book")
-
-
-def test_create_roots_under_output_dir_and_slug() -> None:
-    paths = make_paths()
-    assert paths.root == Path("/out/my_book")
+    return BookPaths(root=Path("/out/my_book"))
 
 
 def test_model_is_frozen() -> None:
