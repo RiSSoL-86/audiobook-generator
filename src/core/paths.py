@@ -48,6 +48,10 @@ class BookPaths(BaseModel):
         """Path to a chapter's markdown, e.g. ``text/chapter_001.md``."""
         return self.text_dir / f"{chapter_dir_name(index)}.md"
 
+    def chapter_translated_file(self, index: int) -> Path:
+        """Translated chapter markdown, e.g. ``chapter_001.translated.md``."""
+        return self.text_dir / f"{chapter_dir_name(index)}.translated.md"
+
     def chapter_chunks_dir(self, chapter_index: int) -> Path:
         """Directory holding a chapter's text chunks."""
         return self.chunks_dir / chapter_dir_name(chapter_index)

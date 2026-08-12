@@ -8,16 +8,18 @@ class Stage(IntEnum):
 
     EXTRACT = 1
     CHAPTERS = 2
-    CHUNK = 3
-    TTS = 4
-    MERGE = 5
+    TRANSLATE = 3
+    CHUNK = 4
+    TTS = 5
+    MERGE = 6
 
     @property
     def banner(self) -> str:
-        """Stage header for logs, e.g. ``Stage 1/5: Extract text``."""
+        """Stage header for logs, e.g. ``Stage 1/6: Extract text``."""
         titles = {
             Stage.EXTRACT: "Extract text",
             Stage.CHAPTERS: "Detect chapters",
+            Stage.TRANSLATE: "Translate chapters",
             Stage.CHUNK: "Split into chunks",
             Stage.TTS: "Generate audio",
             Stage.MERGE: "Merge MP3 files",
@@ -31,6 +33,7 @@ class FromStage(StrEnum):
 
     EXTRACT = "extract"
     CHAPTERS = "chapters"
+    TRANSLATE = "translate"
     CHUNK = "chunk"
     TTS = "tts"
     MERGE = "merge"

@@ -28,11 +28,23 @@ class MergeSnapshot(CamelCaseModel):
 
 
 @final
+class TranslateSnapshot(CamelCaseModel):
+    """Translation settings captured in the manifest, when --translate ran."""
+
+    model: str = Field(..., description="OpenAI model id used for translation")
+    source_lang: str = Field(..., description="Source language code")
+    target_lang: str = Field(..., description="Target language code")
+
+
+@final
 class ProcessingSettings(CamelCaseModel):
     """Snapshot of the settings used for a run (secrets excluded)."""
 
     tts: TTSSnapshot
     merge: MergeSnapshot
+    translate: TranslateSnapshot | None = Field(
+        default=None, description="Set only when the run translated chapters"
+    )
 
 
 @final

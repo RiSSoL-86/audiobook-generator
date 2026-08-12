@@ -12,7 +12,7 @@ from core.chapter_file import read_body, render_chapter
 from core.logging import setup_logging
 from core.manifest import ManifestRepository
 from core.models.book import BookStatus
-from core.models.manifest import BookManifest
+from core.models.manifest import BookManifest, TranslateSnapshot
 from core.models.stage import FromStage, Stage
 from core.paths import BookPaths
 from core.utils import get_logger, slugify
@@ -21,6 +21,7 @@ from services.chunk.service import ChunkService
 from services.clean.service import CleanService
 from services.extract.service import ExtractService
 from services.merge.service import MergeService
+from services.translate.service import TranslateService
 from services.tts.service import TTSService
 
 if TYPE_CHECKING:
@@ -42,12 +43,14 @@ class Pipeline:
         chapter_filter: int | None,
         force: bool,
         dry_run: bool,
+        translate: bool,
     ) -> None:
         self.pdf = pdf_path
         self.paths = paths
         self.chapter = chapter_filter
         self.force = force
         self.dry_run = dry_run
+        self.translate = translate
         self.repo = ManifestRepository(path=paths.manifest_file)
         self.manifest = self._load_manifest()
         self.logger = get_logger("pipeline")
@@ -61,6 +64,9 @@ class Pipeline:
         if from_stage <= Stage.CHAPTERS <= to_stage:
             self.logger.info(msg=Stage.CHAPTERS.banner)
             await self._stage_chapters()
+        if from_stage <= Stage.TRANSLATE <= to_stage:
+            self.logger.info(msg=Stage.TRANSLATE.banner)
+            await self._stage_translate()
         if from_stage <= Stage.CHUNK <= to_stage:
             self.logger.info(msg=Stage.CHUNK.banner)
             await self._stage_chunks()
@@ -149,12 +155,40 @@ class Pipeline:
         self._save()
         self.logger.info(msg=f"Detected {len(chapters)} chapters")
 
+    async def _stage_translate(self) -> None:
+        if not self.translate:
+            self.logger.info(msg="Translation disabled; skipping")
+            return
+        if self.dry_run:
+            return
+        translate_service = TranslateService()
+        await translate_service.execute(
+            chapters=self._chapters(),
+            paths=self.paths,
+            force=self.force,
+        )
+        if self.manifest.settings is not None:
+            self.manifest.settings.translate = TranslateSnapshot(
+                model=settings.translate.model,
+                source_lang=settings.translate.source_lang,
+                target_lang=settings.translate.target_lang,
+            )
+        self.manifest.status = BookStatus.TRANSLATED
+        self._save()
+
+    def _chapter_source(self, index: int) -> Path:
+        """Translated markdown when translating, else the original chapter."""
+        translated = self.paths.chapter_translated_file(index)
+        if self.translate and translated.exists():
+            return translated
+        return self.paths.chapter_file(index)
+
     async def _stage_chunks(self) -> None:
         chunk_service = ChunkService()
         for chapter in self._chapters():
             if chapter.chunks and not self.force:
                 continue
-            raw = self.paths.chapter_file(chapter.index).read_text(
+            raw = self._chapter_source(chapter.index).read_text(
                 encoding="utf-8"
             )
             contents = await chunk_service.execute(
@@ -262,6 +296,12 @@ def generate(
         bool,
         typer.Option("--dry-run", help="Log actions without side effects"),
     ] = False,
+    translate: Annotated[
+        bool,
+        typer.Option(
+            "--translate", help="Translate chapters via OpenAI before chunking"
+        ),
+    ] = False,
 ) -> None:
     """Run the audiobook pipeline for one PDF into an output folder."""
     if from_stage.stage > to_stage.stage:
@@ -277,6 +317,7 @@ def generate(
         chapter_filter=chapter,
         force=force,
         dry_run=dry_run,
+        translate=translate,
     )
     asyncio.run(pipeline.run(from_stage.stage, to_stage.stage))
 
