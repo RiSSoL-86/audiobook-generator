@@ -4,6 +4,7 @@ import pytest
 from typer.testing import CliRunner
 
 import main
+from app_settings import settings
 from core.manifest import ManifestRepository
 from core.models.book import BookStatus
 from core.models.chapter import Chapter
@@ -28,6 +29,7 @@ def make_pipeline(
     force: bool = False,
     dry_run: bool = False,
     chapter: int | None = None,
+    translate: bool = False,
 ) -> main.Pipeline:
     """A Pipeline rooted in a temp dir with a placeholder PDF."""
     pdf = tmp_path / "book.pdf"
@@ -38,6 +40,7 @@ def make_pipeline(
         chapter_filter=chapter,
         force=force,
         dry_run=dry_run,
+        translate=translate,
     )
 
 
@@ -183,6 +186,88 @@ async def test_chunk_force_removes_stale_chunk_and_audio(
     assert not stale_chunk.exists()
     assert not stale_audio.exists()
     assert paths.chunk_file(1, 1).exists()
+
+
+class FakeTranslateService:
+    """Prefixes the markdown instead of calling OpenAI; records the calls."""
+
+    translated: ClassVar[list[str]] = []
+
+    async def execute(
+        self,
+        chapters: list[Chapter],
+        paths: BookPaths,
+        force: bool = False,
+    ) -> None:
+        for chapter in chapters:
+            output = paths.chapter_translated_file(chapter.index)
+            if output.exists() and not force:
+                continue
+            text = paths.chapter_file(chapter.index).read_text(
+                encoding="utf-8"
+            )
+            type(self).translated.append(text)
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.write_text(f"RU:\n{text}", encoding="utf-8")
+
+
+async def test_translate_stage_writes_file_and_chunk_reads_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    FakeTranslateService.translated.clear()
+    FakeChunkService.chunked.clear()
+    paths = BookPaths(root=tmp_path / "out")
+    chapter = Chapter(index=1, raw_title="One", slug="one")
+    ManifestRepository(path=paths.manifest_file).save(
+        BookManifest(
+            source_file="book.pdf",
+            slug="book",
+            settings=settings.to_snapshot(),
+            chapters=[chapter],
+        )
+    )
+    chapter_md = paths.chapter_file(1)
+    chapter_md.parent.mkdir(parents=True, exist_ok=True)
+    chapter_md.write_text("# One\n\nBody.", encoding="utf-8")
+    monkeypatch.setattr(main, "TranslateService", FakeTranslateService)
+    monkeypatch.setattr(main, "ChunkService", FakeChunkService)
+
+    pipeline = make_pipeline(tmp_path, translate=True)
+    await pipeline.run(Stage.TRANSLATE, Stage.CHUNK)
+
+    translated = paths.chapter_translated_file(1)
+    assert translated.read_text(encoding="utf-8") == "RU:\n# One\n\nBody."
+    assert FakeTranslateService.translated == ["# One\n\nBody."]
+    # The chunk stage must consume the translated body, not the original.
+    assert paths.chunk_file(1, 1).read_text(encoding="utf-8") == (
+        "RU:\n# One\n\nBody."
+    )
+    # The run records what it translated in the manifest settings snapshot.
+    snapshot = pipeline.manifest.settings
+    assert snapshot is not None
+    assert snapshot.translate is not None
+    assert snapshot.translate.target_lang == settings.translate.target_lang
+
+
+async def test_translate_stage_skipped_without_flag(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paths = BookPaths(root=tmp_path / "out")
+    seed_manifest(paths, [Chapter(index=1, raw_title="One", slug="one")])
+    chapter_md = paths.chapter_file(1)
+    chapter_md.parent.mkdir(parents=True, exist_ok=True)
+    chapter_md.write_text("# One\n\nBody.", encoding="utf-8")
+
+    def boom() -> FakeTranslateService:
+        msg = "translate must not run without --translate"
+        raise AssertionError(msg)
+
+    monkeypatch.setattr(main, "TranslateService", boom)
+
+    pipeline = make_pipeline(tmp_path, translate=False)
+    await pipeline.run(Stage.TRANSLATE, Stage.TRANSLATE)
+
+    assert not paths.chapter_translated_file(1).exists()
 
 
 async def test_dry_run_writes_no_manifest(tmp_path: Path) -> None:

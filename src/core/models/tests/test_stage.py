@@ -7,6 +7,7 @@ def test_stage_order() -> None:
     assert list(Stage) == [
         Stage.EXTRACT,
         Stage.CHAPTERS,
+        Stage.TRANSLATE,
         Stage.CHUNK,
         Stage.TTS,
         Stage.MERGE,
@@ -15,8 +16,8 @@ def test_stage_order() -> None:
 
 
 def test_banner_includes_position_and_title() -> None:
-    assert Stage.EXTRACT.banner == "Stage 1/5: Extract text"
-    assert Stage.MERGE.banner == "Stage 5/5: Merge MP3 files"
+    assert Stage.EXTRACT.banner == "Stage 1/6: Extract text"
+    assert Stage.MERGE.banner == "Stage 6/6: Merge MP3 files"
 
 
 @pytest.mark.parametrize(
@@ -24,6 +25,7 @@ def test_banner_includes_position_and_title() -> None:
     [
         (FromStage.EXTRACT, Stage.EXTRACT),
         (FromStage.CHAPTERS, Stage.CHAPTERS),
+        (FromStage.TRANSLATE, Stage.TRANSLATE),
         (FromStage.CHUNK, Stage.CHUNK),
         (FromStage.TTS, Stage.TTS),
         (FromStage.MERGE, Stage.MERGE),

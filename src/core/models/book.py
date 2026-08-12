@@ -9,5 +9,6 @@ class BookStatus(StrEnum):
     PENDING = "pending"
     TEXT_EXTRACTED = "text_extracted"
     CHAPTERS_READY = "chapters_ready"
+    TRANSLATED = "translated"
     AUDIO_GENERATED = "audio_generated"
     COMPLETED = "completed"
